@@ -20,6 +20,7 @@ typedef struct File {
 typedef struct Dec {
     uint64_t base;
     uint16_t length;
+    long double codeValue;
     char* decodedString;
     uint64_t decodedString_pos;
     uint64_t file_pos;
@@ -178,17 +179,91 @@ long double fracBinaryConverter(uint64_t start, uint64_t end)
     return binaryConverted;
 }
 
+uint16_t cumulativeProbability(uint64_t symbolPos)
+{
+    uint16_t cumulativeProbability = 0;
+
+    for(uint64_t i = 0; i < symbolPos ; i++)
+    {
+        cumulativeProbability = cumulativeProbability + alphabet->values[i];
+    }
+    return cumulativeProbability;
+}
+
+void intervalSelection()
+{
+    uint64_t symbolPos = alphabet->size;
+
+    long double base = (long double) dec->base / UINT16_MAX;
+    long double length = (long double) dec->length / UINT16_MAX;
+    //long double cumulativeProb = (long double) cumulativeProbability(symbolPos) / UINT16_MAX;
+    long double fileValue = 0.0;
+
+    long double x = base + (length * ((long double) cumulativeProbability(symbolPos) / UINT16_MAX));
+    long double y = base + length;
+
+    //printf("\ncumProb: %.25Lf\n", cumulativeProb);
+    //printf("\n%.25Lf | %.25Lf\n", x, dec->codeValue);
+
+    while(x > dec->codeValue)
+    {
+        //printf("\n%.25Lf | %.25Lf\n", x, dec->codeValue);
+        symbolPos--;
+        y = x;
+        x = base + length * ((long double) cumulativeProbability(symbolPos) / UINT16_MAX);
+    }
+
+    x = x * UINT16_MAX;
+    y = y * UINT16_MAX;
+
+    dec->base = (uint64_t) x;
+    dec->length = (uint16_t) y - dec->base;
+
+    dec->decodedString = realloc(dec->decodedString, sizeof(char) * (dec->decodedString_pos + 1));
+    dec->decodedString[dec->decodedString_pos] = alphabet->letters[symbolPos];
+    dec->decodedString_pos++;
+
+}
+
+void decoderRenorm()
+{
+    while(dec->length <= UINT16_MAX/2)
+    {
+        if(dec->base >= UINT16_MAX/2)
+        {
+            dec->base = 2*(dec->base - UINT16_MAX/2);
+            dec->codeValue = 2*(dec->codeValue - 0.5);
+        }
+        else
+        {
+            dec->base = dec->base * 2;
+            dec->codeValue = dec->codeValue * 2;
+        }
+        dec->file_pos++;
+
+        if(file->text[dec->file_pos] == '1')
+        {
+            dec->codeValue = dec->codeValue + (pow(2,((int) dec->file_pos * -1)) * 1);
+            //printf("%Lf", dec->codeValue);
+        }
+        
+        dec->length = 2*dec->length;
+    }
+}
+
 void decode()
 {
     dec = (Dec*) malloc(sizeof(Dec));
-    dec->base = UINT16_MAX;
-    dec->length = 0;
+    dec->base = 0;
+    dec->length = UINT16_MAX;
     dec->decodedString = (char*) malloc(sizeof(char));
     dec->decodedString_pos = 0;
     dec->file_pos = 0;
-    
-    uint64_t pos = 0;
-    while (pos < file->size) //num of bits in bitstream
+
+    dec->codeValue = fracBinaryConverter(dec->file_pos, dec->file_pos + 16);
+    dec->file_pos += 16;
+
+    while (dec->file_pos < file->size) //num of bits in bitstream
     {
         //v = 16 pos of bitstream?
         //bitstream = 0.bitstream
@@ -198,7 +273,53 @@ void decode()
         //x = intermediate base | y = intermediate length
         //while intermediate base > v(16 bits read from bitsream converted to decimal||integer(both base and v have to be on the same representation method. watch out for v conversion to integer where as v is the lower part of a fractional binary number (0.v)))
 
-        printf("%lu|%lu %.510Lf\n",pos, pos+16, fracBinaryConverter(pos, pos + 16));
-        pos += 16;
+
+
+        // if(dec->file_pos > file->size)
+        // {
+        //     dec->codeValue = fracBinaryConverter(dec->file_pos, (dec->file_pos + (file->size - dec->file_pos)));
+        //     dec->file_pos += file->size - dec->file_pos;
+        // }
+        // else
+        // {
+        //     dec->codeValue = fracBinaryConverter(dec->file_pos, dec->file_pos + 16);
+        //     dec->file_pos += 16;
+        // }
+
+        // if (pos+16 > file->size)
+        // {
+        //     printf("%lu|%lu %.510Lf\n",pos, file->size - pos, fracBinaryConverter(pos, (pos + (file->size - pos))));
+        //     pos += file->size - pos;
+        // }
+        // else
+        // {
+        //     printf("%lu|%lu %.510Lf\n",pos, pos+16, fracBinaryConverter(pos, pos + 16));
+        //     pos += 16;
+        // }
+
+        intervalSelection();
+
+        printf("\n");
+        for(uint64_t i = 0 ; i < dec->decodedString_pos; i++)
+        {
+            printf("%c", dec->decodedString[i]);
+        }
+        printf("\n");
+
+        printf("\n%.25Lf\n", dec->codeValue);
+
+
+
+        if(dec->base >= UINT16_MAX)
+        {
+            dec->base -= UINT16_MAX;
+            dec->codeValue -= 1;
+        }
+
+        if(dec->length <= UINT16_MAX/2)
+        {
+            decoderRenorm();
+        }
+        
     }
 }

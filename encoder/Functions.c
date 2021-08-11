@@ -239,12 +239,22 @@ void interval_update() //TODO fix interval update
     long double cumulativeProb = (long double) cumulativeProbability(symbolPos) / UINT16_MAX;
     long double length = (long double) enc->length / UINT16_MAX;
     long double symbolProb = (long double) alphabet->values[symbolPos] / UINT16_MAX;
+    long double y = 0.0;
     //printf("%u", cumulativeProbability(symbolPos));
     
     //printf("\n\t[base]: %Lf | [cumulativeProb]: %Lf | [length]: %Lf | [symbolProb]: %Lf -> ", base, cumulativeProb, length, symbolProb);
 
+    if(file->text[enc->file_pos] == file->text[file->size-1])
+    {
+        y = base + length;
+    }
+    else
+    {
+        y = base + (length * ((long double) cumulativeProbability(symbolPos + 1) / UINT16_MAX));
+    }
+
     base = base + cumulativeProb * length;
-    length = length * symbolProb;
+    length = y - base;
     base = base * UINT16_MAX;
     length = length * UINT16_MAX;
 
