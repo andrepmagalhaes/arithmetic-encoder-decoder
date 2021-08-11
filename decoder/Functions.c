@@ -160,6 +160,24 @@ void fileWriter(char* path)
 
 // =================================== DEC ===================================
 
+long double fracBinaryConverter(uint64_t start, uint64_t end)
+{
+    long double binaryConverted = 0;
+    uint64_t power = start + 1;
+
+    for(uint64_t i = start ; i < end ; i++)
+    {  
+        if(file->text[i] == '1')
+        {
+            binaryConverted += 1 * (1/(pow(2, power)));
+        }
+        //printf("\n[%c|%lu|%Lf]\n", file->text[i], power, binaryConverted);
+        power++;
+    }
+
+    return binaryConverted;
+}
+
 void decode()
 {
     dec = (Dec*) malloc(sizeof(Dec));
@@ -169,10 +187,9 @@ void decode()
     dec->decodedString_pos = 0;
     dec->file_pos = 0;
     
-    int i = 0;
-    while (file->size != 0) //num of bits in bitstream
+    uint64_t pos = 0;
+    while (pos < file->size) //num of bits in bitstream
     {
-        i++;
         //v = 16 pos of bitstream?
         //bitstream = 0.bitstream
         //need to convert v to decimal where as v = 0.16pos of bitsream
@@ -181,5 +198,7 @@ void decode()
         //x = intermediate base | y = intermediate length
         //while intermediate base > v(16 bits read from bitsream converted to decimal||integer(both base and v have to be on the same representation method. watch out for v conversion to integer where as v is the lower part of a fractional binary number (0.v)))
 
+        printf("%lu|%lu %.510Lf\n",pos, pos+16, fracBinaryConverter(pos, pos + 16));
+        pos += 16;
     }
 }

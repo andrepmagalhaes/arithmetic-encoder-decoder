@@ -1,5 +1,5 @@
 enc:
-	gcc ./encoder/Main.c -o Encode
+	gcc ./encoder/Main.c -o Encode -lm
 
 dec:
-	gcc ./decoder/Main.c -o Decode
+	gcc ./decoder/Main.c -o Decode -lm
