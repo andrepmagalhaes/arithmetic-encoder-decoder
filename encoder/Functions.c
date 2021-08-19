@@ -5,6 +5,8 @@
 #include <math.h>
 #include <string.h>
 
+#define PRECISION UINT16_MAX
+
 //https://reusablesec.blogspot.com/2009/05/character-frequency-analysis-info.html
 
 typedef struct Alphabet {
@@ -111,7 +113,7 @@ void alphabetReader(char *path)
                 line_buffer_aux[j] = line_buffer[i];
                 j++;
             }
-            alphabet->values[position] = (strtod(line_buffer_aux, &ptr_aux)) * UINT16_MAX;
+            alphabet->values[position] = (strtod(line_buffer_aux, &ptr_aux)) * PRECISION;
 
             counter = 0;
             position++;
@@ -163,6 +165,17 @@ void fileWriter(char* path)
 
 // =================================== ENC ===================================
 
+void printAux(char* name)
+{
+    printf("\n");
+    printf("[%s] -> [base]: %f | [length]: %f | [bitstream]: ", name, (float) enc->base / PRECISION, (float) enc->length / PRECISION);
+    for(uint64_t i = 0 ; i < enc->bitStream_pos; i++)
+    {
+        printf("%c", enc->bitStream[i]);
+    }
+    printf(";\n");
+}
+
 uint64_t findSymbol(char symbol)
 {
     uint64_t diff;
@@ -195,35 +208,37 @@ uint16_t cumulativeProbability(uint64_t symbolPos)
 void renormalization()
 {
 
-    while(enc->length <= 32767) //UINT16_MAX / 2
+    while(enc->length <= PRECISION / 2) //UINT16_MAX / 2
     {
         //enc->bitStream_pos++;
         //enc->length = (enc->length << 1);
-        enc->length *= 2;
-        if(enc->base >= 32767) 
+        enc->bitStream = realloc(enc->bitStream, sizeof(char) * (enc->bitStream_pos + 1));
+        enc->length = enc->length * 2;
+        if(enc->base >= PRECISION / 2) 
         {
-            enc->bitStream = realloc(enc->bitStream, sizeof(char) * (enc->bitStream_pos + 1));
             enc->bitStream[enc->bitStream_pos] = '1';
             enc->bitStream_pos++;
-            enc->base = (enc->base - 32767) * 2;
+            enc->base = (enc->base - PRECISION / 2) * 2;
+            //printAux("after renorm base >= 0.5");
             //enc->base = ((enc->base - 32767) << 1); // TODO: test with 32767 (0111111111111111) and 32768 (1000000000000000)
         }
         else
         {
-            enc->bitStream = realloc(enc->bitStream, sizeof(char) * (enc->bitStream_pos + 1));
             enc->bitStream[enc->bitStream_pos] = '0';
             enc->bitStream_pos++;
             //enc->base = (enc->base << 1);
-            enc->base *= 2;
+            enc->base = enc->base * 2;
         }
     }
 }
 
-void propagate_carry()
+void propagate_carry(uint64_t size)
 {
-    uint64_t n = enc->bitStream_pos;
+    uint64_t n = size - 1;
+    printf("\n\tsize: %lu\n", size);
     while(enc->bitStream[n] == '1')
     {
+        printf("\n\tsize: %lu\n", size);
         enc->bitStream[n] = '0';
         n--;
     }
@@ -235,10 +250,10 @@ void interval_update() //TODO fix interval update
     //printf("[base]: %lu | [length]: %u -> ", enc->base, enc->length);
     uint64_t symbolPos = findSymbol(file->text[enc->file_pos]);
     //printf(" | %lu ,", symbolPos);
-    long double base = (long double) enc->base / UINT16_MAX;
-    long double cumulativeProb = (long double) cumulativeProbability(symbolPos) / UINT16_MAX;
-    long double length = (long double) enc->length / UINT16_MAX;
-    long double symbolProb = (long double) alphabet->values[symbolPos] / UINT16_MAX;
+    long double base = (long double) enc->base / PRECISION;
+    long double cumulativeProb = (long double) cumulativeProbability(symbolPos) / PRECISION;
+    long double length = (long double) enc->length / PRECISION;
+    long double symbolProb = (long double) alphabet->values[symbolPos] / PRECISION;
     long double y = 0.0;
     //printf("%u", cumulativeProbability(symbolPos));
     
@@ -250,13 +265,13 @@ void interval_update() //TODO fix interval update
     }
     else
     {
-        y = base + (length * ((long double) cumulativeProbability(symbolPos + 1) / UINT16_MAX));
+        y = base + (length * ((long double) cumulativeProbability(symbolPos + 1) / PRECISION));
     }
 
     base = base + cumulativeProb * length;
     length = y - base;
-    base = base * UINT16_MAX;
-    length = length * UINT16_MAX;
+    base = base * PRECISION;
+    length = length * PRECISION;
 
     //printf("[base]: %Lf | [length]: %Lf \n", base, length);
 
@@ -268,56 +283,53 @@ void interval_update() //TODO fix interval update
 
 }
 
-void bitStream_selector()
-{
-    //enc->t++;
-    if(enc->base <= 32767) //check half
-    {
-        enc->bitStream = realloc(enc->bitStream, sizeof(char) * (enc->bitStream_pos + 1));
-        enc->bitStream[enc->bitStream_pos] = '1';
-        enc->bitStream_pos++;
-    }
-    else
-    {
-        enc->bitStream = realloc(enc->bitStream, sizeof(char) * (enc->bitStream_pos + 1));
-        enc->bitStream[enc->bitStream_pos] = '0';
-        enc->bitStream_pos++;
-    }
-}
+// void bitStream_selector()
+// {
+//     //enc->t++;
+//     if(enc->base <= PRECISION / 2) //check half
+//     {
+//         enc->bitStream = realloc(enc->bitStream, sizeof(char) * (enc->bitStream_pos + 1));
+//         enc->bitStream[enc->bitStream_pos] = '1';
+//         enc->bitStream_pos++;
+//     }
+//     else
+//     {
+//         enc->bitStream = realloc(enc->bitStream, sizeof(char) * (enc->bitStream_pos + 1));
+//         enc->bitStream[enc->bitStream_pos] = '0';
+//         enc->bitStream_pos++;
+//     }
+// }
 
 void code_value_selection() //TODO: finish implementing code value selection
 {
-    enc->bitStream_pos++;
+    enc->bitStream = realloc(enc->bitStream, sizeof(char) * (enc->bitStream_pos + 1));
+    
 
-    if(enc->base <= 32767)
+    
+
+    if(enc->base <= PRECISION / 2)
     {
         enc->bitStream[enc->bitStream_pos] = '1';
+        enc->bitStream_pos++;
     }
     else
     {
         enc->bitStream[enc->bitStream_pos] = '0';
-        enc->bitStream_pos--;
-        propagate_carry();
+        enc->bitStream_pos++;
+        printAux("code value selection");
+        //enc->bitStream_pos--;
+        propagate_carry(enc->bitStream_pos - 1);
     }
 }
 
 //EOF = *
-void printAux(char* name)
-{
-    // printf("\n");
-    // printf("[%s] -> [base]: %lu | [length]: %u | [bitstream]: ", name, enc->base, enc->length);
-    // for(uint64_t i = 0 ; i < enc->bitStream_pos; i++)
-    // {
-    //     printf("%c", enc->bitStream[i]);
-    // }
-    // printf(";\n");
-}
+
 
 void encoder()
 {
     enc = (Enc*) malloc(sizeof(Enc));
     enc->base = 0;
-    enc->length = UINT16_MAX;
+    enc->length = PRECISION;
     enc->t = 0;
     enc->file_pos = 0;
     enc->bitStream_pos = 0;
@@ -325,25 +337,26 @@ void encoder()
 
     uint64_t charCmp = (uint64_t) file->text[enc->file_pos];
 
-    while( charCmp != 42 )
+    while( charCmp != '*' )
     {
         //printf("%c\n", charCmp);
+        printf("\n%c\n", file->text[enc->file_pos]);
         printAux("b4 interval_update");
         interval_update();
         printAux("after interval_update");
-        if(enc->base >= UINT16_MAX)
+        if(enc->base >= PRECISION)
         {
-            enc->base = enc->base - UINT16_MAX;
-            propagate_carry();
+            enc->base = enc->base - PRECISION;
+            propagate_carry(enc->bitStream_pos);
         }
         printAux("after propagate carry");
-        if(enc->length <= 32767)
+        if(enc->length <= PRECISION / 2)
         {
             renormalization();
         }
         printAux("after renorm");
-        bitStream_selector();
-        printAux("after bitstream select");
+        // bitStream_selector();
+        // printAux("after bitstream select");
         enc->file_pos++;
         charCmp = (uint64_t) file->text[enc->file_pos];
     }

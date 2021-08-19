@@ -10,6 +10,3 @@
 void fileReader(char* path);
 void alphabetReader(char* path);
 void fileWriter(char* path);
-void renormalization();
-uint16_t cumulativeProbability(uint64_t symbolPos);
-void encoder();
