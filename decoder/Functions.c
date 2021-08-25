@@ -166,7 +166,7 @@ void fileWriter(char* path)
 void printAux(char* name)
 {
     printf("\n");
-    printf("[%s] -> [base]: %f | [length]: %f | [codeValue]: %f | [decodedString]: ", name, (float) dec->base / PRECISION, (float) dec->length / PRECISION, (float) dec->codeValue / PRECISION);
+    printf("%s -> [base]: %f | [length]: %f | [codeValue]: %f | [decodedString]: ", name, (float) dec->base / PRECISION, (float) dec->length / PRECISION, (float) dec->codeValue / PRECISION);
    for(uint64_t i = 0 ; i < dec->decodedString_pos; i++)
     {
         printf("%c", dec->decodedString[i]);
@@ -205,7 +205,7 @@ uint16_t cumulativeProbability(uint64_t symbolPos)
 
 void intervalSelection()
 {
-    uint64_t symbolPos = alphabet->size;
+    uint64_t symbolPos = alphabet->size - 1;
 
     long double base = (long double) dec->base / PRECISION;
     long double length = (long double) dec->length / PRECISION;
@@ -218,12 +218,15 @@ void intervalSelection()
     //printf("\ncumProb: %.25Lf\n", cumulativeProb);
     //printf("\n%.25Lf | %.25Lf\n", x, dec->codeValue);
 
-    while(x > (dec->codeValue / PRECISION))
+
+
+    while(x > ((long double) dec->codeValue / PRECISION))
     {
+        printf("\n      x: %.25Lf | y: %.25Lf", x, y);
         //printf("\n%.25Lf | %.25Lf\n", x, dec->codeValue);
         symbolPos--;
         y = x;
-        x = base + length * ((long double) cumulativeProbability(symbolPos) / PRECISION);
+        x = base + (length * ((long double) cumulativeProbability(symbolPos) / PRECISION));
     }
 
     x = x * PRECISION;
@@ -231,6 +234,8 @@ void intervalSelection()
 
     dec->base = (uint64_t) x;
     dec->length = (uint16_t) y - dec->base;
+
+    printf("\n      symbolPos: %lu\n", symbolPos);
 
     dec->decodedString = realloc(dec->decodedString, sizeof(char) * (dec->decodedString_pos + 1));
     dec->decodedString[dec->decodedString_pos] = alphabet->letters[symbolPos];
@@ -252,13 +257,13 @@ void decoderRenorm()
             dec->base = dec->base * 2;
             dec->codeValue = dec->codeValue * 2;
         }
-        dec->file_pos++;
 
-        if(file->text[dec->file_pos] == '1')
-        {
-            dec->codeValue = dec->codeValue + ((pow(2,((int) dec->file_pos * -1)) * 1) * PRECISION);
-            //printf("%Lf", dec->codeValue);
-        }
+        printAux("  pre code value update");
+        dec->codeValue = dec->codeValue + ((pow(2,((int) (dec->file_pos + 1) * -1)) * 1) * PRECISION);
+        printf("\n      asdasd: %f | %lu", (pow(2,((int) (dec->file_pos + 1) * -1)) * 1), dec->file_pos);
+        dec->file_pos++;
+        //printf("%Lf", dec->codeValue);
+        printAux("  post code value update");
         
         dec->length = 2*dec->length;
     }
@@ -273,13 +278,12 @@ void decode()
     dec->decodedString_pos = 0;
     dec->file_pos = 0;
 
-    dec->codeValue = fracBinaryConverter(dec->file_pos, dec->file_pos + 16);
-    dec->file_pos += 16;
+    dec->codeValue = fracBinaryConverter(0, 16);
+    dec->file_pos = 16;
 
     printf("filePos: %lu | fileSize: %lu\n", dec->file_pos, file->size);
-    printAux("aaa");
 
-    do //num of bits in bitstream
+    while(dec->file_pos < file->size)  //num of bits in bitstream
     {
         //v = 16 pos of bitstream?
         //bitstream = 0.bitstream
@@ -288,6 +292,7 @@ void decode()
         //s = last symbol of alphabet
         //x = intermediate base | y = intermediate length
         //while intermediate base > v(16 bits read from bitsream converted to decimal||integer(both base and v have to be on the same representation method. watch out for v conversion to integer where as v is the lower part of a fractional binary number (0.v)))
+        //value being read must always have the same amoutn of bits as precision
 
 
 
@@ -313,11 +318,11 @@ void decode()
         //     pos += 16;
         // }
 
-        printAux("pre-intervalSelection");
+        printAux("pre intervalSelection");
 
         intervalSelection();
 
-        printAux("post-intervalSelection");
+        printAux("post intervalSelection");
 
         // printf("\n");
         // for(uint64_t i = 0 ; i < dec->decodedString_pos; i++)
@@ -336,10 +341,14 @@ void decode()
             dec->codeValue -= PRECISION;
         }
 
+        printAux("post base >= 1");
+
         if(dec->length <= PRECISION/2)
         {
             decoderRenorm();
         }
+
+        printAux("post length <= 0.5");
         
-    }while (dec->file_pos < file->size);
+    }
 }
