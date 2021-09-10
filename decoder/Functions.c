@@ -174,14 +174,54 @@ void printAux(char* name)
     printf(";\n");
 }
 
-long double fracBinaryConverter(uint64_t start, uint64_t end)
+char* intervalSelect()
+{
+    uint64_t counter = 0;
+    char* interval;
+    interval = (char*) malloc(sizeof(char)*16);
+    while(counter < 16)
+    {
+        if((counter + dec->file_pos) > file->size)
+        {
+            interval[counter] = '0';
+        }
+        else
+        {
+            interval[counter] = file->text[dec->file_pos + counter];
+        }
+        counter++;
+    }
+
+    return interval;
+}
+
+// char* intervalCheck(char* val)
+// {
+//     size_t size = strlen(val);
+
+//     if(size < 16)
+//     {
+//         char* res;
+//         res = (char*) malloc(sizeof(char)*16);
+//         res = strcpy(res, val);
+
+//         for(int i = size - 1; i < 16; i++)
+//         {
+//             res[i] = '0';
+//         }
+//         return res;
+//     }
+//     return val;
+// }
+
+long double fracBinaryConverter(char* str)
 {
     long double binaryConverted = 0;
-    uint64_t power = start + 1;
+    uint64_t power = 1;
 
-    for(uint64_t i = start ; i < end ; i++)
+    for(uint64_t i = 0 ; i < 16 ; i++)
     {  
-        if(file->text[i] == '1')
+        if(str[i] == '1')
         {
             binaryConverted += 1 * (1/(pow(2, power)));
         }
@@ -189,7 +229,8 @@ long double fracBinaryConverter(uint64_t start, uint64_t end)
         power++;
     }
 
-    return binaryConverted * PRECISION;
+    printf("\n %Lf | %s\n", binaryConverted, binaryConverted, str);
+    return binaryConverted;
 }
 
 uint16_t cumulativeProbability(uint64_t symbolPos)
@@ -210,7 +251,7 @@ void intervalSelection()
     long double base = (long double) dec->base / PRECISION;
     long double length = (long double) dec->length / PRECISION;
     //long double cumulativeProb = (long double) cumulativeProbability(symbolPos) / PRECISION;
-    long double fileValue = 0.0;
+    //long double fileValue = 0.0;
 
     long double x = base + (length * ((long double) cumulativeProbability(symbolPos) / PRECISION));
     long double y = base + length;
@@ -218,15 +259,19 @@ void intervalSelection()
     //printf("\ncumProb: %.25Lf\n", cumulativeProb);
     //printf("\n%.25Lf | %.25Lf\n", x, dec->codeValue);
 
+    printf("\n          |interval selec| b4 loop -> [x]: %Lf | [y]: %Lf | [codeValue]: %Lf\n", x, y, (long double) dec->codeValue / PRECISION);
 
 
     while(x > ((long double) dec->codeValue / PRECISION))
     {
-        printf("\n      x: %.25Lf | y: %.25Lf", x, y);
+        printf("\n %Lf \n", (long double) cumulativeProbability(symbolPos) / PRECISION);
+        // printf("\n      x: %.25Lf | y: %.25Lf", x, y);
         //printf("\n%.25Lf | %.25Lf\n", x, dec->codeValue);
         symbolPos--;
         y = x;
         x = base + (length * ((long double) cumulativeProbability(symbolPos) / PRECISION));
+
+        printf("\n          |interval selec| loop -> [x]: %Lf | [y]: %Lf | [codeValue]: %Lf\n", x, y, (long double) dec->codeValue / PRECISION);
     }
 
     x = x * PRECISION;
@@ -235,7 +280,7 @@ void intervalSelection()
     dec->base = (uint64_t) x;
     dec->length = (uint16_t) y - dec->base;
 
-    printf("\n      symbolPos: %lu\n", symbolPos);
+    // printf("\n      symbolPos: %lu\n", symbolPos);
 
     dec->decodedString = realloc(dec->decodedString, sizeof(char) * (dec->decodedString_pos + 1));
     dec->decodedString[dec->decodedString_pos] = alphabet->letters[symbolPos];
@@ -257,15 +302,15 @@ void decoderRenorm()
             dec->base = dec->base * 2;
             dec->codeValue = dec->codeValue * 2;
         }
-
-        printAux("  pre code value update");
-        dec->codeValue = dec->codeValue + ((pow(2,((int) (dec->file_pos + 1) * -1)) * 1) * PRECISION);
-        printf("\n      asdasd: %f | %lu", (pow(2,((int) (dec->file_pos + 1) * -1)) * 1), dec->file_pos);
+        printf("\nnew code value: %Lf\n", fracBinaryConverter(intervalSelect()));
+        dec->codeValue = (uint64_t) (fracBinaryConverter(intervalSelect()) * PRECISION);
         dec->file_pos++;
+        // printf("\n      asdasd: %f | %lu", (pow(2,((int) (dec->file_pos + 1) * -1)) * 1), dec->file_pos);
         //printf("%Lf", dec->codeValue);
-        printAux("  post code value update");
         
         dec->length = 2*dec->length;
+        
+        printAux("      |renorm| loop");
     }
 }
 
@@ -277,11 +322,12 @@ void decode()
     dec->decodedString = (char*) malloc(sizeof(char));
     dec->decodedString_pos = 0;
     dec->file_pos = 0;
+    dec->codeValue = (uint64_t) (fracBinaryConverter(intervalSelect()) * PRECISION);
+    dec->file_pos++;
 
-    dec->codeValue = fracBinaryConverter(0, 16);
-    dec->file_pos = 16;
+    // printf("filePos: %lu | fileSize: %lu\n", dec->file_pos, file->size);
 
-    printf("filePos: %lu | fileSize: %lu\n", dec->file_pos, file->size);
+    // printf("\n%lu | %lu\n", dec->file_pos, file->size);
 
     while(dec->file_pos < file->size)  //num of bits in bitstream
     {
@@ -339,16 +385,16 @@ void decode()
         {
             dec->base -= PRECISION;
             dec->codeValue -= PRECISION;
+            printAux("post base >= 1");
         }
 
-        printAux("post base >= 1");
 
         if(dec->length <= PRECISION/2)
         {
             decoderRenorm();
+            printAux("post renorm(length <= 0.5)");
         }
 
-        printAux("post length <= 0.5");
         
     }
 }
